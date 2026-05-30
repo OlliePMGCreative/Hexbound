@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hexbound: The Necromancer's Keep</title>
+  <meta name="description" content="An 8-bit retro side-scrolling platformer. A brave sorcerer battles an evil necromancer through a spooky castle. Play in your browser!" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- ── MAIN GAME WRAPPER ── -->
+  <div id="game-wrapper">
+
+    <!-- CRT overlay effect -->
+    <div id="crt-overlay"></div>
+
+    <!-- ── START MENU ── -->
+    <div id="start-menu" class="screen active">
+      <div id="title-bg"></div>
+      <div id="menu-content">
+        <div id="game-title-wrapper">
+          <div id="game-title-line1" class="title-line">HEXBOUND</div>
+          <div id="game-title-line2" class="title-line">THE NECROMANCER'S KEEP</div>
+        </div>
+        <nav id="main-menu-options" aria-label="Main Menu">
+          <button class="menu-btn" id="btn-play" data-action="play">▶ PLAY</button>
+          <button class="menu-btn" id="btn-load" data-action="load">⚿ LOAD</button>
+          <button class="menu-btn" id="btn-settings" data-action="settings">⚙ SETTINGS</button>
+        </nav>
+        <div id="menu-hint" class="blink-text">PRESS ANY KEY TO BEGIN</div>
+      </div>
+    </div>
+
+    <!-- ── PASSCODE SCREEN ── -->
+    <div id="passcode-screen" class="screen">
+      <div class="overlay-panel">
+        <h2 class="panel-title">ENTER PASSCODE</h2>
+        <p class="panel-sub">Type your 4-character area code to continue</p>
+        <div id="passcode-display">
+          <span class="passcode-char" id="pc0">_</span>
+          <span class="passcode-char" id="pc1">_</span>
+          <span class="passcode-char" id="pc2">_</span>
+          <span class="passcode-char" id="pc3">_</span>
+        </div>
+        <div id="passcode-grid" role="group" aria-label="Passcode character grid"></div>
+        <div id="passcode-actions">
+          <button class="panel-btn" id="btn-passcode-confirm">CONFIRM</button>
+          <button class="panel-btn secondary" id="btn-passcode-back">BACK</button>
+        </div>
+        <div id="passcode-error" class="error-text"></div>
+      </div>
+    </div>
+
+    <!-- ── SETTINGS SCREEN ── -->
+    <div id="settings-screen" class="screen">
+      <div class="overlay-panel">
+        <h2 class="panel-title">SETTINGS</h2>
+        <div class="setting-row">
+          <label for="sfx-toggle">SOUND FX</label>
+          <button id="sfx-toggle" class="toggle-btn active" role="switch" aria-checked="true">ON</button>
+        </div>
+        <div class="setting-row">
+          <label for="music-toggle">MUSIC</label>
+          <button id="music-toggle" class="toggle-btn active" role="switch" aria-checked="true">ON</button>
+        </div>
+        <div class="setting-row">
+          <label for="crt-toggle">CRT EFFECT</label>
+          <button id="crt-toggle" class="toggle-btn active" role="switch" aria-checked="true">ON</button>
+        </div>
+        <button class="panel-btn" id="btn-settings-back" style="margin-top:24px;">BACK</button>
+      </div>
+    </div>
+
+    <!-- ── GAME CANVAS ── -->
+    <div id="game-screen" class="screen">
+      <!-- HUD -->
+      <div id="hud">
+        <div id="hud-left">
+          <span id="hud-lives">♥ ♥ ♥</span>
+          <span id="hud-mana">✦ ✦ ✦ ✦ ✦</span>
+        </div>
+        <div id="hud-center">
+          <span id="hud-area">AREA 1: THE GRAVEYARD</span>
+        </div>
+        <div id="hud-right">
+          <span id="hud-score">SCORE: 0</span>
+          <span id="hud-civilians">SAVED: 0/2</span>
+        </div>
+      </div>
+      <canvas id="game-canvas" width="800" height="450" aria-label="Game Canvas"></canvas>
+
+      <!-- Mobile controls -->
+      <div id="mobile-controls">
+        <div id="dpad">
+          <button class="ctrl-btn" id="btn-left" aria-label="Move Left">◀</button>
+          <button class="ctrl-btn" id="btn-right" aria-label="Move Right">▶</button>
+        </div>
+        <div id="action-btns">
+          <button class="ctrl-btn action" id="btn-jump" aria-label="Jump">▲</button>
+          <button class="ctrl-btn action spell" id="btn-spell" aria-label="Cast Spell">✦</button>
+          <button class="ctrl-btn action interact" id="btn-interact" aria-label="Interact">!</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── DIALOGUE BOX ── -->
+    <div id="dialogue-overlay" class="hidden">
+      <div id="dialogue-box">
+        <div id="dialogue-portrait-wrapper">
+          <canvas id="dialogue-portrait" width="48" height="48"></canvas>
+          <span id="dialogue-name"></span>
+        </div>
+        <div id="dialogue-text"></div>
+        <div id="dialogue-hint" class="blink-text">[ PRESS E TO CONTINUE ]</div>
+      </div>
+    </div>
+
+    <!-- ── PASSCODE REVEAL ── -->
+    <div id="passcode-reveal" class="hidden">
+      <div class="overlay-panel">
+        <h2 class="panel-title">AREA COMPLETE!</h2>
+        <p class="panel-sub">Your passcode for Area 2:</p>
+        <div id="reveal-code" class="reveal-code">----</div>
+        <p class="panel-sub small">Write this down and enter it at the LOAD screen to resume from this point.</p>
+        <button class="panel-btn" id="btn-reveal-continue">CONTINUE ▶</button>
+      </div>
+    </div>
+
+    <!-- ── GAME OVER ── -->
+    <div id="gameover-screen" class="hidden">
+      <div class="overlay-panel">
+        <h2 class="panel-title red">GAME OVER</h2>
+        <button class="panel-btn" id="btn-retry">RETRY</button>
+        <button class="panel-btn secondary" id="btn-gameover-menu">MAIN MENU</button>
+      </div>
+    </div>
+
+  </div><!-- /game-wrapper -->
+
+  <script src="js/audio.js"></script>
+  <script src="js/spritesheet.js"></script>
+  <script src="js/level.js"></script>
+  <script src="js/enemies.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+
+</body>
+</html>
