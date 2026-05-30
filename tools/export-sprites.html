@@ -117,7 +117,15 @@
 
 <div id="sections"></div>
 
-<!-- Include game sprite rendering code -->
+<!-- Stub out SpriteLoader so spritesheet.js always uses procedural drawing here -->
+<script>
+  const SpriteLoader = {
+    draw: () => false,
+    drawVariant: () => false,
+    has: () => false,
+    isReady: () => true,
+  };
+</script>
 <script src="../js/spritesheet.js"></script>
 <script>
 
