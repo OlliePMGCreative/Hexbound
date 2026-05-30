@@ -105,6 +105,16 @@ const Sprites = (() => {
   // and animation support. This avoids external image dependencies.
 
   function drawSorcerer(ctx, x, y, frame = 0, facingRight = true, state = 'idle', meleeAttFrame = 0) {
+    // ── Try image first ──
+    const stateKey = {
+      idle: 'sorcerer_idle', walk: 'sorcerer_walk', jump: 'sorcerer_jump',
+      fall: 'sorcerer_jump', cast: 'sorcerer_cast', attack: 'sorcerer_attack',
+      hurt: 'sorcerer_hurt',
+    }[state] || 'sorcerer_idle';
+    const animFrame = Math.floor(frame / 6); // slow down to ~10fps
+    if (SpriteLoader.draw(ctx, stateKey, x, y, animFrame, !facingRight)) return;
+
+    // ── Procedural fallback ──
     ctx.save();
     if (!facingRight) { ctx.scale(-1, 1); x = -x - 24; }
 
@@ -192,9 +202,15 @@ const Sprites = (() => {
   //   SKELETON — 18x30
   // ════════════════
   function drawSkeleton(ctx, x, y, frame = 0, facingRight = true, dying = false) {
+    // ── Try image first ──
+    const key = dying ? 'skeleton_die' : 'skeleton_walk';
+    const alpha = dying ? Math.max(0, 1 - (frame / 20)) : 1;
+    const animFrame = Math.floor(frame / 6);
+    if (SpriteLoader.draw(ctx, key, x, y, animFrame, !facingRight, alpha)) return;
+
+    // ── Procedural fallback ──
     ctx.save();
     if (!facingRight) { ctx.scale(-1, 1); x = -x - 16; }
-    const alpha = dying ? Math.max(0, 1 - (frame / 20)) : 1;
     ctx.globalAlpha = alpha;
 
     // Skull
@@ -248,8 +264,12 @@ const Sprites = (() => {
   //   GHOST — 16x20
   // ════════════════
   function drawGhost(ctx, x, y, frame = 0) {
-    const floatY = y + Math.sin(frame * 0.07) * 4;
+    // ── Try image first ──
+    const floatOffset = Math.sin(frame * 0.07) * 4;
+    if (SpriteLoader.draw(ctx, 'ghost_float', x, y + floatOffset, Math.floor(frame / 6))) return;
 
+    // ── Procedural fallback ──
+    const floatY = y + floatOffset;
     ctx.save();
     // Glow halo
     const grd = ctx.createRadialGradient(x + 8, floatY + 10, 2, x + 8, floatY + 10, 18);
@@ -277,7 +297,12 @@ const Sprites = (() => {
   //   BAT — 20x12
   // ════════════════
   function drawBat(ctx, x, y, frame = 0) {
-    const flapY = y + Math.sin(frame * 0.2) * 2;
+    // ── Try image first ──
+    const floatOffset = Math.sin(frame * 0.2) * 2;
+    if (SpriteLoader.draw(ctx, 'bat_fly', x, y + floatOffset, Math.floor(frame / 4))) return;
+
+    // ── Procedural fallback ──
+    const flapY = y + floatOffset;
     const flapAngle = Math.sin(frame * 0.3) * 0.4;
 
     ctx.save();
@@ -378,52 +403,37 @@ const Sprites = (() => {
     ctx.restore();
   }
 
-  // ════════════════
-  //   PLATFORM TILE — 16x16
-  // ════════════════
+  // GBA tile drawing with image support
   function drawStoneTile(ctx, x, y, variant = 0) {
-    const P = 16; // tile size
-    // Base stone
+    if (SpriteLoader.drawVariant(ctx, 'tile_stone', variant % 3, x, y)) return;
+    // ── Procedural fallback ──
+    const P = 16;
     ctx.fillStyle = variant === 1 ? PAL.stoneMid : PAL.stoneDark;
     ctx.fillRect(x, y, P, P);
-
-    // Stone block grid lines
     ctx.fillStyle = PAL.stoneDark;
-    ctx.fillRect(x,      y,     P, 1);
-    ctx.fillRect(x,      y,     1, P);
-    ctx.fillRect(x + P-1,y,     1, P);
-    ctx.fillRect(x,      y+P-1, P, 1);
-
-    // Inner block pattern
+    ctx.fillRect(x, y, P, 1); ctx.fillRect(x, y, 1, P);
+    ctx.fillRect(x + P-1, y, 1, P); ctx.fillRect(x, y+P-1, P, 1);
     ctx.fillStyle = PAL.stoneLight;
     if (variant === 0) {
-      ctx.fillRect(x + 2, y + 2, 5, 4);
-      ctx.fillRect(x + 9, y + 2, 5, 4);
-      ctx.fillRect(x + 2, y + 10, 5, 4);
-      ctx.fillRect(x + 9, y + 10, 5, 4);
+      ctx.fillRect(x+2,y+2,5,4); ctx.fillRect(x+9,y+2,5,4);
+      ctx.fillRect(x+2,y+10,5,4); ctx.fillRect(x+9,y+10,5,4);
     } else {
-      ctx.fillRect(x + 2, y + 2, 12, 4);
-      ctx.fillRect(x + 2, y + 10, 12, 4);
+      ctx.fillRect(x+2,y+2,12,4); ctx.fillRect(x+2,y+10,12,4);
     }
-
-    // Top edge highlight
     ctx.fillStyle = PAL.stoneMid;
-    ctx.fillRect(x + 1, y + 1, P - 2, 1);
+    ctx.fillRect(x+1,y+1,P-2,1);
   }
 
-  // ════════════════
-  //   GRASS TILE — 16x16 (top of platform)
-  // ════════════════
   function drawGrassTile(ctx, x, y) {
+    if (SpriteLoader.draw(ctx, 'tile_grass', x, y)) return;
+    // ── Procedural fallback ──
     drawStoneTile(ctx, x, y, 1);
-    // Grass top
     ctx.fillStyle = PAL.moss;
     ctx.fillRect(x, y, 16, 4);
-    // Grass blades
     ctx.fillStyle = PAL.mossLight;
     for (let i = 0; i < 16; i += 4) {
-      ctx.fillRect(x + i + 1, y - 2, 1, 3);
-      ctx.fillRect(x + i + 3, y - 1, 1, 2);
+      ctx.fillRect(x+i+1, y-2, 1, 3);
+      ctx.fillRect(x+i+3, y-1, 1, 2);
     }
   }
 

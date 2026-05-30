@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Hexbound — Sprite Exporter</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0d0820;
+      color: #d4c8f0;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      padding: 24px;
+    }
+    h1 { color: #e879f9; font-size: 18px; margin-bottom: 4px; }
+    .subtitle { color: #7c6ca0; margin-bottom: 32px; font-size: 11px; line-height: 1.6; }
+    .subtitle b { color: #c084fc; }
+
+    .section { margin-bottom: 40px; }
+    .section h2 {
+      color: #a855f7; font-size: 12px; letter-spacing: 2px;
+      border-bottom: 1px solid #2d1b4e; padding-bottom: 8px; margin-bottom: 16px;
+    }
+    .sprite-grid { display: flex; flex-wrap: wrap; gap: 20px; }
+
+    .sprite-card {
+      background: #160c28;
+      border: 1px solid #2d1b4e;
+      border-radius: 4px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .sprite-card canvas {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      background: #0a0618;
+      border: 1px solid #1a0f2e;
+      /* Scale up for visibility — actual PNG is the small canvas size */
+    }
+    .sprite-name { color: #c084fc; font-size: 10px; }
+    .sprite-info { color: #6b5890; font-size: 9px; }
+
+    .dl-btn {
+      background: #3b1f6b;
+      color: #e879f9;
+      border: 1px solid #5b2d8e;
+      padding: 4px 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 9px;
+      cursor: pointer;
+      letter-spacing: 1px;
+    }
+    .dl-btn:hover { background: #5b2d8e; color: #fff; }
+
+    .dl-all {
+      background: #5b2d8e; color: #fff;
+      border: none; padding: 10px 24px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px; cursor: pointer;
+      margin-bottom: 32px;
+      letter-spacing: 2px;
+    }
+    .dl-all:hover { background: #7e3eb5; }
+
+    .how-to {
+      background: #120a24;
+      border: 1px solid #2d1b4e;
+      border-left: 3px solid #7e3eb5;
+      padding: 16px;
+      margin-bottom: 32px;
+      line-height: 1.8;
+      font-size: 11px;
+    }
+    .how-to b { color: #e879f9; }
+    .how-to code { color: #86efac; background: #0a0618; padding: 1px 4px; }
+
+    .palette {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
+    }
+    .swatch {
+      width: 32px; height: 32px;
+      image-rendering: pixelated;
+      border: 1px solid #2d1b4e;
+      position: relative;
+    }
+    .swatch-label {
+      font-size: 8px; color: #6b5890; margin-top: 2px; text-align: center;
+      width: 48px; overflow: hidden; white-space: nowrap;
+    }
+    .swatch-wrap { display: flex; flex-direction: column; align-items: center; }
+  </style>
+</head>
+<body>
+
+<h1>⚗ HEXBOUND — SPRITE EXPORTER</h1>
+<div class="subtitle">
+  Download the current placeholder sprites as PNGs. Edit them in
+  <b>Aseprite</b>, <b>LibreSprite</b>, or any pixel art tool.<br>
+  Save back to the same path shown under each sprite, refresh the game — your art loads automatically.<br>
+  <b>Each image must keep the exact same pixel dimensions shown below.</b>
+</div>
+
+<div class="how-to">
+  <b>HOW TO REPLACE A SPRITE:</b><br>
+  1. Click <b>Download</b> under the sprite you want to edit.<br>
+  2. Open in Aseprite (or similar). The canvas size is fixed — do not resize it.<br>
+  3. For animated sprites: each frame is side-by-side horizontally. Edit each frame in sequence.<br>
+  4. Export/Save As → PNG → replace the file at the <code>assets/sprites/…</code> path shown.<br>
+  5. Hard-refresh the game (<b>Cmd+Shift+R</b>) — your art is live.<br>
+  <b>Missing files fall back to the built-in procedural art automatically.</b>
+</div>
+
+<button class="dl-all" id="dl-all-btn">⬇ DOWNLOAD ALL SPRITES AS PNGs</button>
+
+<div id="sections"></div>
+
+<!-- Include game sprite rendering code -->
+<script src="../js/spritesheet.js"></script>
+<script>
+
+// ── Palette for reference swatches ──
+const GBA_PALETTE = [
+  { hex: '#06030f', name: 'Outline' },
+  { hex: '#0d0820', name: 'Sky deep' },
+  { hex: '#140c2e', name: 'Sky mid' },
+  { hex: '#1a0f2e', name: 'Dark bg' },
+  { hex: '#2d1b4e', name: 'Shadow' },
+  { hex: '#5b2d8e', name: 'Robe' },
+  { hex: '#7e3eb5', name: 'Robe hi' },
+  { hex: '#d4a070', name: 'Skin' },
+  { hex: '#d1c9b0', name: 'Bone' },
+  { hex: '#8a7e6a', name: 'Bone shadow' },
+  { hex: '#cc2020', name: 'Red eye' },
+  { hex: '#22aa30', name: 'Grass' },
+  { hex: '#1a7a28', name: 'Grass dk' },
+  { hex: '#6e637a', name: 'Stone lt' },
+  { hex: '#504660', name: 'Stone mid' },
+  { hex: '#362c44', name: 'Stone dk' },
+  { hex: '#7c5233', name: 'Staff' },
+  { hex: '#d946ef', name: 'Magic' },
+  { hex: '#e879f9', name: 'Magic hi' },
+  { hex: '#f4f0ff', name: 'White' },
+];
+
+// ── Sprite definitions ──
+// Each entry: { name, path, fw, fh, frames, draw(ctx, frameIndex) }
+const SCALE = 4; // display scale (actual PNG is at 1x)
+
+const SPRITES = [
+  // ────────── PLAYER ──────────
+  {
+    section: 'Player — assets/sprites/player/',
+    items: [
+      {
+        name: 'sorcerer_idle.png',
+        path: 'assets/sprites/player/sorcerer_idle.png',
+        fw: 24, fh: 44, frames: 4,
+        draw(ctx, fi) {
+          Sprites.drawSorcerer(ctx, fi * 24, 0, fi * 22, true, 'idle');
+        }
+      },
+      {
+        name: 'sorcerer_walk.png',
+        path: 'assets/sprites/player/sorcerer_walk.png',
+        fw: 24, fh: 44, frames: 6,
+        draw(ctx, fi) {
+          Sprites.drawSorcerer(ctx, fi * 24, 0, fi * 4, true, 'walk');
+        }
+      },
+      {
+        name: 'sorcerer_jump.png',
+        path: 'assets/sprites/player/sorcerer_jump.png',
+        fw: 24, fh: 44, frames: 2,
+        draw(ctx, fi) {
+          Sprites.drawSorcerer(ctx, fi * 24, 0, 0, true, fi === 0 ? 'jump' : 'fall');
+        }
+      },
+      {
+        name: 'sorcerer_cast.png',
+        path: 'assets/sprites/player/sorcerer_cast.png',
+        fw: 24, fh: 44, frames: 3,
+        draw(ctx, fi) {
+          Sprites.drawSorcerer(ctx, fi * 24, 0, fi * 5, true, 'cast');
+        }
+      },
+      {
+        name: 'sorcerer_attack.png',
+        path: 'assets/sprites/player/sorcerer_attack.png',
+        fw: 24, fh: 44, frames: 4,
+        draw(ctx, fi) {
+          Sprites.drawSorcerer(ctx, fi * 24, 0, 0, true, 'attack', fi * 5);
+        }
+      },
+      {
+        name: 'sorcerer_hurt.png',
+        path: 'assets/sprites/player/sorcerer_hurt.png',
+        fw: 24, fh: 44, frames: 2,
+        draw(ctx, fi) {
+          Sprites.drawSorcerer(ctx, fi * 24, 0, 0, true, fi === 0 ? 'idle' : 'jump');
+        }
+      },
+    ]
+  },
+  // ────────── ENEMIES ──────────
+  {
+    section: 'Enemies — assets/sprites/enemies/',
+    items: [
+      {
+        name: 'skeleton_walk.png',
+        path: 'assets/sprites/enemies/skeleton_walk.png',
+        fw: 16, fh: 28, frames: 6,
+        draw(ctx, fi) {
+          Sprites.drawSkeleton(ctx, fi * 16, 0, fi * 4, true, false);
+        }
+      },
+      {
+        name: 'skeleton_rise.png',
+        path: 'assets/sprites/enemies/skeleton_rise.png',
+        fw: 16, fh: 28, frames: 8,
+        draw(ctx, fi) {
+          // Simulate skeleton rising: clip from bottom
+          const progress = fi / 7;
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(fi * 16, 28 - 28 * progress, 16, 28 * progress + 2);
+          ctx.clip();
+          Sprites.drawSkeleton(ctx, fi * 16, 0, fi * 2, true, false);
+          ctx.restore();
+        }
+      },
+      {
+        name: 'skeleton_die.png',
+        path: 'assets/sprites/enemies/skeleton_die.png',
+        fw: 16, fh: 28, frames: 4,
+        draw(ctx, fi) {
+          Sprites.drawSkeleton(ctx, fi * 16, fi * 2, fi * 10, true, true);
+        }
+      },
+      {
+        name: 'ghost_float.png',
+        path: 'assets/sprites/enemies/ghost_float.png',
+        fw: 16, fh: 20, frames: 4,
+        draw(ctx, fi) {
+          Sprites.drawGhost(ctx, fi * 16, 0, fi * 20);
+        }
+      },
+      {
+        name: 'bat_fly.png',
+        path: 'assets/sprites/enemies/bat_fly.png',
+        fw: 20, fh: 12, frames: 4,
+        draw(ctx, fi) {
+          Sprites.drawBat(ctx, fi * 20, 0, fi * 8);
+        }
+      },
+    ]
+  },
+  // ────────── TILES ──────────
+  {
+    section: 'Tiles — assets/sprites/tiles/',
+    items: [
+      {
+        name: 'tile_grass.png',
+        path: 'assets/sprites/tiles/tile_grass.png',
+        fw: 16, fh: 16, frames: 1,
+        draw(ctx, fi) {
+          Sprites.drawGrassTile(ctx, 0, 0);
+        }
+      },
+      {
+        name: 'tile_stone.png',
+        info: '3 variants side-by-side (48×16)',
+        path: 'assets/sprites/tiles/tile_stone.png',
+        fw: 16, fh: 16, frames: 3,
+        draw(ctx, fi) {
+          Sprites.drawStoneTile(ctx, fi * 16, 0, fi);
+        }
+      },
+      {
+        name: 'tombstone.png',
+        path: 'assets/sprites/tiles/tombstone.png',
+        fw: 14, fh: 22, frames: 1,
+        draw(ctx, fi) {
+          Sprites.drawTombstone(ctx, 0, 2, 'RIP');
+        }
+      },
+      {
+        name: 'dead_tree.png',
+        path: 'assets/sprites/tiles/dead_tree.png',
+        fw: 28, fh: 56, frames: 1,
+        draw(ctx, fi) {
+          Sprites.drawDeadTree(ctx, 0, 0);
+        }
+      },
+    ]
+  },
+  // ────────── BACKGROUND ──────────
+  {
+    section: 'Background — assets/sprites/background/',
+    items: [
+      {
+        name: 'sky.png',
+        info: 'Tileable sky. Game scales this to full width.',
+        path: 'assets/sprites/background/sky.png',
+        fw: 480, fh: 270, frames: 1,
+        draw(ctx, fi) {
+          // Simple gradient sky placeholder
+          const g = ctx.createLinearGradient(0, 0, 0, 270);
+          g.addColorStop(0, '#0d0820');
+          g.addColorStop(0.5, '#140c2e');
+          g.addColorStop(1, '#1e1042');
+          ctx.fillStyle = g; ctx.fillRect(0, 0, 480, 270);
+          // Stars
+          ctx.fillStyle = 'rgba(220,210,255,0.8)';
+          [[40,12],[120,35],[200,8],[290,50],[370,20],[450,6],
+           [80,65],[250,58],[430,72],[640,55]].forEach(([sx,sy]) => {
+            ctx.fillRect(sx, sy, 2, 2);
+          });
+        }
+      },
+      {
+        name: 'moon.png',
+        path: 'assets/sprites/background/moon.png',
+        fw: 96, fh: 96, frames: 1,
+        draw(ctx, fi) {
+          ctx.fillStyle = '#e060e8';
+          ctx.beginPath(); ctx.arc(48, 48, 40, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = 'rgba(120,40,160,0.5)';
+          ctx.beginPath(); ctx.arc(34, 36, 7, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(58, 56, 5, 0, Math.PI*2); ctx.fill();
+        }
+      },
+      {
+        name: 'silhouette.png',
+        info: 'Scrolling tree silhouette strip.',
+        path: 'assets/sprites/background/silhouette.png',
+        fw: 480, fh: 120, frames: 1,
+        draw(ctx, fi) {
+          ctx.fillStyle = 'rgba(0,0,0,0)';
+          ctx.clearRect(0, 0, 480, 120);
+          ctx.fillStyle = '#160c28';
+          // Trees
+          [40, 120, 200, 280, 360, 440].forEach(tx => {
+            ctx.fillRect(tx - 3, 20, 7, 100);
+            ctx.fillRect(tx - 18, 20, 36, 3);
+            ctx.fillRect(tx - 12, 30, 24, 3);
+          });
+        }
+      },
+    ]
+  },
+  // ────────── UI ──────────
+  {
+    section: 'UI — assets/sprites/ui/',
+    items: [
+      {
+        name: 'heart_full.png',
+        path: 'assets/sprites/ui/heart_full.png',
+        fw: 12, fh: 10, frames: 1,
+        draw(ctx, fi) {
+          ctx.fillStyle = '#cc2020';
+          ctx.fillRect(1,1,4,4); ctx.fillRect(7,1,4,4);
+          ctx.fillRect(0,3,12,4); ctx.fillRect(2,7,8,2); ctx.fillRect(4,9,4,1);
+        }
+      },
+      {
+        name: 'heart_empty.png',
+        path: 'assets/sprites/ui/heart_empty.png',
+        fw: 12, fh: 10, frames: 1,
+        draw(ctx, fi) {
+          ctx.fillStyle = '#362c44';
+          ctx.fillRect(1,1,4,4); ctx.fillRect(7,1,4,4);
+          ctx.fillRect(0,3,12,4); ctx.fillRect(2,7,8,2); ctx.fillRect(4,9,4,1);
+        }
+      },
+      {
+        name: 'mana_orb_full.png',
+        path: 'assets/sprites/ui/mana_orb_full.png',
+        fw: 10, fh: 10, frames: 1,
+        draw(ctx, fi) {
+          ctx.fillStyle = '#5b2d8e'; ctx.fillRect(2,0,6,10);
+          ctx.fillRect(0,2,10,6);
+          ctx.fillStyle = '#d946ef';
+          ctx.fillRect(3,2,4,6); ctx.fillRect(2,3,6,4);
+          ctx.fillStyle = '#f4f0ff'; ctx.fillRect(3,3,2,2);
+        }
+      },
+      {
+        name: 'mana_orb_empty.png',
+        path: 'assets/sprites/ui/mana_orb_empty.png',
+        fw: 10, fh: 10, frames: 1,
+        draw(ctx, fi) {
+          ctx.fillStyle = '#2d1b4e'; ctx.fillRect(2,0,6,10);
+          ctx.fillRect(0,2,10,6);
+          ctx.fillStyle = '#362c44';
+          ctx.fillRect(3,2,4,6); ctx.fillRect(2,3,6,4);
+        }
+      },
+    ]
+  },
+];
+
+// ── BUILD UI ──
+const sectionsEl = document.getElementById('sections');
+const allCanvases = []; // {canvas, name, path}
+
+SPRITES.forEach(group => {
+  const sec = document.createElement('div');
+  sec.className = 'section';
+  const h2 = document.createElement('h2');
+  h2.textContent = group.section;
+  sec.appendChild(h2);
+
+  const grid = document.createElement('div');
+  grid.className = 'sprite-grid';
+
+  group.items.forEach(spec => {
+    const totalW = spec.fw * spec.frames;
+    const totalH = spec.fh;
+
+    // Real canvas at 1× (this is what gets downloaded)
+    const realCanvas = document.createElement('canvas');
+    realCanvas.width  = totalW;
+    realCanvas.height = totalH;
+    const rCtx = realCanvas.getContext('2d');
+    rCtx.imageSmoothingEnabled = false;
+
+    for (let f = 0; f < spec.frames; f++) {
+      spec.draw(rCtx, f);
+    }
+
+    // Display canvas at SCALE× for visibility
+    const dispCanvas = document.createElement('canvas');
+    const dispScale = Math.max(2, Math.min(SCALE, Math.floor(300 / totalW)));
+    dispCanvas.width  = totalW  * dispScale;
+    dispCanvas.height = totalH  * dispScale;
+    dispCanvas.style.width  = (totalW  * dispScale) + 'px';
+    dispCanvas.style.height = (totalH  * dispScale) + 'px';
+    const dCtx = dispCanvas.getContext('2d');
+    dCtx.imageSmoothingEnabled = false;
+    dCtx.drawImage(realCanvas, 0, 0, dispCanvas.width, dispCanvas.height);
+
+    // Card
+    const card = document.createElement('div');
+    card.className = 'sprite-card';
+
+    const namEl = document.createElement('div');
+    namEl.className = 'sprite-name';
+    namEl.textContent = spec.name;
+
+    const infEl = document.createElement('div');
+    infEl.className = 'sprite-info';
+    infEl.textContent = spec.info
+      ? `${totalW}×${totalH}px — ${spec.info}`
+      : `${totalW}×${totalH}px  •  ${spec.frames} frame${spec.frames > 1 ? 's' : ''}  •  ${spec.frames > 1 ? spec.fw + 'px each' : ''}`;
+
+    const pathEl = document.createElement('div');
+    pathEl.className = 'sprite-info';
+    pathEl.style.color = '#3a8a5e';
+    pathEl.textContent = '→ ' + spec.path;
+
+    const btn = document.createElement('button');
+    btn.className = 'dl-btn';
+    btn.textContent = '⬇ DOWNLOAD';
+    btn.onclick = () => downloadCanvas(realCanvas, spec.name);
+
+    card.appendChild(dispCanvas);
+    card.appendChild(namEl);
+    card.appendChild(infEl);
+    card.appendChild(pathEl);
+    card.appendChild(btn);
+    grid.appendChild(card);
+
+    allCanvases.push({ canvas: realCanvas, name: spec.name, path: spec.path });
+  });
+
+  sec.appendChild(grid);
+  sectionsEl.appendChild(sec);
+});
+
+// ── Palette section ──
+const palSec = document.createElement('div');
+palSec.className = 'section';
+palSec.innerHTML = '<h2>GBA COLOUR PALETTE REFERENCE</h2><div class="palette" id="pal"></div>';
+sectionsEl.appendChild(palSec);
+const palEl = document.getElementById('pal');
+GBA_PALETTE.forEach(({ hex, name }) => {
+  const wrap = document.createElement('div');
+  wrap.className = 'swatch-wrap';
+  const sw = document.createElement('canvas');
+  sw.className = 'swatch'; sw.width = 32; sw.height = 32;
+  const sc = sw.getContext('2d');
+  sc.fillStyle = hex; sc.fillRect(0, 0, 32, 32);
+  const lb = document.createElement('div');
+  lb.className = 'swatch-label';
+  lb.title = hex;
+  lb.textContent = hex;
+  const nm = document.createElement('div');
+  nm.className = 'swatch-label';
+  nm.textContent = name;
+  wrap.appendChild(sw); wrap.appendChild(lb); wrap.appendChild(nm);
+  palEl.appendChild(wrap);
+});
+
+// ── Download helpers ──
+function downloadCanvas(canvas, filename) {
+  const a = document.createElement('a');
+  a.download = filename;
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+
+document.getElementById('dl-all-btn').addEventListener('click', () => {
+  allCanvases.forEach(({ canvas, name }, i) => {
+    setTimeout(() => downloadCanvas(canvas, name), i * 150);
+  });
+});
+
+</script>
+</body>
+</html>
