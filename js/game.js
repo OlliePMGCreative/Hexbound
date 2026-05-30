@@ -26,14 +26,18 @@ const Game = (() => {
   const canvas = document.getElementById('game-canvas');
   const ctx    = canvas.getContext('2d');
 
-  // Ensure canvas pixel dimensions match logical area
+  // Ensure canvas pixel dimensions match the actual available area
   function resizeCanvas() {
-    canvas.width  = 800;
-    canvas.height = 414; // full height minus HUD (36) and mobile controls (48)
+    const HUD_H  = 36;
+    const CTRL_H = 48;
+    const W = window.innerWidth;
+    const H = window.innerHeight - HUD_H - CTRL_H;
 
-    // Update camera height
-    Level.camera.width  = 800;
-    Level.camera.height = 414;
+    canvas.width  = W;
+    canvas.height = H;
+
+    Level.camera.width  = W;
+    Level.camera.height = H;
   }
 
   // ── SCREEN SHAKE ──
@@ -119,30 +123,24 @@ const Game = (() => {
       updateShake();
     }
 
-    // ── RENDER ──
-    ctx.save();
+    // ── RENDER ── (only when game is active)
+    if (currentState === STATE.PLAYING || currentState === STATE.COMPLETE || currentState === STATE.GAMEOVER) {
+      ctx.save();
 
-    // Apply screen shake
-    if (shakeX || shakeY) {
-      ctx.translate(shakeX, shakeY);
+      if (shakeX || shakeY) ctx.translate(shakeX, shakeY);
+
+      // Clear
+      ctx.fillStyle = '#0d0a1e';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      Level.render(ctx);
+      Enemies.render(ctx);
+      UI.renderCivilians(ctx);
+      Player.render(ctx);
+      drawScanlines(ctx);
+
+      ctx.restore();
     }
-
-    // Clear
-    ctx.fillStyle = '#0d0a1e';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Draw level
-    Level.render(ctx);
-
-    // Draw entities
-    Enemies.render(ctx);
-    UI.renderCivilians(ctx);
-    Player.render(ctx);
-
-    // CRT pixel scanlines (canvas-level)
-    drawScanlines(ctx);
-
-    ctx.restore();
 
     requestAnimationFrame(gameLoop);
   }

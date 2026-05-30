@@ -199,8 +199,8 @@ const Player = (() => {
       Audio.play('land');
     }
 
-    // Kill plane
-    if (entity.y > Level.TILE * 26) {
+    // Kill plane — fell off the bottom of the map
+    if (entity.y > Level.getMapHeight() + 64) {
       takeDamage(1);
       reset();
     }

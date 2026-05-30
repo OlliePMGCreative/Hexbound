@@ -16,7 +16,7 @@ const Level = (() => {
   // Map is 80 tiles wide × 25 tiles tall
   // Each row is a string; character positions match tile columns
   const AREA1_MAP_ROWS = 25;
-  const AREA1_MAP_COLS = 80;
+  const AREA1_MAP_COLS = 120; // wider map for larger screens
 
   // Build the map as a 2D array
   function buildArea1Map() {
@@ -31,7 +31,7 @@ const Level = (() => {
 
     // Floating platforms (row, startCol, length)
     const platforms = [
-      [18, 6, 6],
+      [18, 6,  6],
       [15, 14, 5],
       [17, 22, 7],
       [13, 32, 5],
@@ -42,6 +42,11 @@ const Level = (() => {
       [15, 64, 5],
       [12, 70, 6],
       [17, 74, 6],
+      [14, 82, 5],
+      [16, 90, 7],
+      [13, 98, 4],
+      [15, 104, 6],
+      [17, 112, 5],
     ];
 
     platforms.forEach(([row, startX, len]) => {
@@ -54,8 +59,8 @@ const Level = (() => {
       }
     });
 
-    // Left starting platform
-    for (let x = 0; x < 10; x++) {
+    // Left starting platform (cols 0-12)
+    for (let x = 0; x < 12; x++) {
       map[20][x] = 2;
       map[21][x] = 1;
     }
@@ -112,8 +117,8 @@ const Level = (() => {
           powerup: 'mana'
         },
         {
-          tx: 62, ty: 22,
-          name: 'MILLER\'S DAUGHTER',
+          tx: 80, ty: 22,
+          name: "MILLER'S DAUGHTER",
           dialogue: [
             "You... you came from the graveyard path? How are you still alive?!",
             "My father tried to fight them. He never came back.",
@@ -124,7 +129,7 @@ const Level = (() => {
           powerup: 'health'
         }
       ],
-      levelExit: { tx: 78, ty: 22 }
+      levelExit: { tx: 117, ty: 22 }
     };
   }
 
@@ -136,16 +141,22 @@ const Level = (() => {
   // ── CAMERA ──
   const camera = {
     x: 0, y: 0,
-    targetX: 0,
+    targetX: 0, targetY: 0,
     width: 800,
-    height: 414, // canvas - HUD
-    mapPixelWidth: AREA1_MAP_COLS * TILE,
-    mapPixelHeight: AREA1_MAP_ROWS * TILE,
+    height: 500,
+    get mapPixelWidth()  { return AREA1_MAP_COLS * TILE; },
+    get mapPixelHeight() { return AREA1_MAP_ROWS * TILE; },
 
     follow(entity) {
+      // Horizontal follow — centre player horizontally
       this.targetX = entity.x - this.width / 2 + entity.width / 2;
       this.targetX = Math.max(0, Math.min(this.targetX, this.mapPixelWidth - this.width));
-      this.x += (this.targetX - this.x) * 0.12; // smooth follow
+      this.x += (this.targetX - this.x) * 0.12;
+
+      // Vertical follow — keep player in lower 60% of screen
+      this.targetY = entity.y - this.height * 0.5;
+      this.targetY = Math.max(0, Math.min(this.targetY, this.mapPixelHeight - this.height));
+      this.y += (this.targetY - this.y) * 0.10;
     }
   };
 
@@ -233,17 +244,21 @@ const Level = (() => {
 
   // ── RENDER ──
   function render(ctx) {
+    if (!map) return; // guard: level not loaded yet
+
     const camX = Math.floor(camera.x);
     const camY = Math.floor(camera.y);
 
     drawBackground(ctx, camX);
 
-    // Determine visible tile columns
+    // Determine visible tile columns and rows
     const startCol = Math.max(0, Math.floor(camX / TILE));
     const endCol   = Math.min(AREA1_MAP_COLS - 1, Math.ceil((camX + camera.width) / TILE));
+    const startRow = Math.max(0, Math.floor(camY / TILE));
+    const endRow   = Math.min(AREA1_MAP_ROWS - 1, Math.ceil((camY + camera.height) / TILE));
 
     // Draw tiles
-    for (let row = 0; row < AREA1_MAP_ROWS; row++) {
+    for (let row = startRow; row <= endRow; row++) {
       for (let col = startCol; col <= endCol; col++) {
         const tile = map[row][col];
         if (tile === 0) continue;
@@ -262,6 +277,7 @@ const Level = (() => {
       const px = dec.tx * TILE - camX;
       const py = dec.ty * TILE - camY;
       if (px < -64 || px > camera.width + 64) return;
+      if (py < -64 || py > camera.height + 64) return;
       if (dec.type === 'tombstone') Sprites.drawTombstone(ctx, px, py, dec.label);
       if (dec.type === 'deadtree')  Sprites.drawDeadTree(ctx, px, py);
     });
@@ -309,7 +325,8 @@ const Level = (() => {
 
   // ── COLLISION ──
   function getTile(col, row) {
-    if (row < 0 || row >= AREA1_MAP_ROWS || col < 0 || col >= AREA1_MAP_COLS) return 1; // treat out of bounds as solid
+    if (!map) return 0;
+    if (row < 0 || row >= AREA1_MAP_ROWS || col < 0 || col >= AREA1_MAP_COLS) return 1;
     return map[row][col];
   }
 
@@ -321,18 +338,16 @@ const Level = (() => {
 
   // Rectangle collision with map
   function resolveCollision(entity) {
-    const { x, y, width, height } = entity;
-    let vx = entity.vx, vy = entity.vy;
+    const { width, height } = entity;
 
     // Horizontal movement
-    entity.x += vx;
-    // Check left and right edges
-    if (vx > 0) {
+    entity.x += entity.vx;
+    if (entity.vx > 0) {
       if (isSolid(entity.x + width, entity.y + 2) || isSolid(entity.x + width, entity.y + height - 2)) {
         entity.x = Math.floor((entity.x + width) / TILE) * TILE - width;
         entity.vx = 0;
       }
-    } else if (vx < 0) {
+    } else if (entity.vx < 0) {
       if (isSolid(entity.x, entity.y + 2) || isSolid(entity.x, entity.y + height - 2)) {
         entity.x = Math.ceil(entity.x / TILE) * TILE;
         entity.vx = 0;
@@ -341,16 +356,14 @@ const Level = (() => {
 
     // Vertical movement
     entity.onGround = false;
-    entity.y += vy;
-    if (vy > 0) {
-      // Falling — check bottom edge
+    entity.y += entity.vy;
+    if (entity.vy > 0) {
       if (isSolid(entity.x + 2, entity.y + height) || isSolid(entity.x + width - 2, entity.y + height)) {
         entity.y = Math.floor((entity.y + height) / TILE) * TILE - height;
         entity.vy = 0;
         entity.onGround = true;
       }
-    } else if (vy < 0) {
-      // Rising — check top edge
+    } else if (entity.vy < 0) {
       if (isSolid(entity.x + 2, entity.y) || isSolid(entity.x + width - 2, entity.y)) {
         entity.y = Math.ceil(entity.y / TILE) * TILE;
         entity.vy = 0;
@@ -375,6 +388,7 @@ const Level = (() => {
     resolveCollision,
     isSolid,
     getSpawns() { return spawns; },
-    getMapWidth() { return AREA1_MAP_COLS * TILE; }
+    getMapWidth()  { return AREA1_MAP_COLS * TILE; },
+    getMapHeight() { return AREA1_MAP_ROWS * TILE; }
   };
 })();
