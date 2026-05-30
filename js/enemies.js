@@ -14,7 +14,7 @@ const Enemies = (() => {
       x: tx * Level.TILE,
       y: ty * Level.TILE - 30,
       width: 18, height: 30,
-      vx: (Math.random() > 0.5 ? 1 : -1) * 1.0,
+      vx: (Math.random() > 0.5 ? 1 : -1) * 0.6, // slower, more predictable
       vy: 0,
       onGround: false,
       facingRight: true,
@@ -24,8 +24,8 @@ const Enemies = (() => {
       active: true,
       dying: false,
       dyingFrame: 0,
-      patrolMin: Math.max(0, tx * Level.TILE - 80),
-      patrolMax: tx * Level.TILE + 80,
+      patrolMin: Math.max(0, tx * Level.TILE - 96),
+      patrolMax: tx * Level.TILE + 96,
       hurtTimer: 0,
     };
   }
@@ -117,18 +117,18 @@ const Enemies = (() => {
         e.vx *= -1;
         e.facingRight = !e.facingRight;
       } else {
-        e.vx = e.facingRight ? 1.0 : -1.0;
+        e.vx = e.facingRight ? 0.6 : -0.6; // slow, predictable walk
       }
     }
 
-    // Chase player when nearby
+    // Chase player when nearby (but slower than before)
     const p = Player.entity;
     const dx = p.x - e.x;
     const dy = p.y - e.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 120) {
+    if (dist < 100) {
       e.facingRight = dx > 0;
-      e.vx = e.facingRight ? 1.6 : -1.6;
+      e.vx = e.facingRight ? 1.1 : -1.1; // chase speed capped
     }
 
     // Damage player on contact

@@ -5,14 +5,17 @@
 const Player = (() => {
 
   const GRAVITY    = 0.45;
-  const JUMP_FORCE = -9.5;
-  const DBL_JUMP_FORCE = -7.5;
-  const MOVE_SPEED = 3.2;
-  const FRICTION   = 0.82;
+  const JUMP_FORCE = -10.5;        // slightly stronger jump
+  const DBL_JUMP_FORCE = -8.5;
+  const MOVE_SPEED = 4.0;          // faster run
+  const FRICTION   = 0.80;
   const MAX_FALL   = 14;
 
-  const SPELL_COOLDOWN = 22;  // frames between shots
-  const INVINCIBLE_DURATION = 60; // frames after being hit
+  const SPELL_COOLDOWN      = 14;  // faster fire rate
+  const SPELL_SPEED         = 14;  // faster bolts
+  const SPELL_LIFETIME      = 120; // longer range
+  const INVINCIBLE_DURATION = 100; // ~1.7 sec of immunity after hit
+  const MANA_REGEN_FRAMES   = 90;  // mana regen every 1.5 sec
 
   const entity = {
     x: 32, y: 200,
@@ -111,11 +114,11 @@ const Player = (() => {
     Audio.play('spell');
 
     entity.spellBolts.push({
-      x: entity.facingRight ? entity.x + entity.width : entity.x - 12,
+      x: entity.facingRight ? entity.x + entity.width : entity.x - 16,
       y: entity.y + 14,
-      vx: entity.facingRight ? 9 : -9,
+      vx: entity.facingRight ? SPELL_SPEED : -SPELL_SPEED,
       vy: 0,
-      width: 12, height: 6,
+      width: 16, height: 8,
       frame: 0,
       facingRight: entity.facingRight,
       active: true,
@@ -128,9 +131,7 @@ const Player = (() => {
       b.x += b.vx;
       b.lifetime++;
       b.frame++;
-
-      // Destroy if hits solid tile or goes off screen
-      if (Level.isSolid(b.x + (b.facingRight ? b.width : 0), b.y + 3) || b.lifetime > 80) {
+      if (Level.isSolid(b.x + (b.facingRight ? b.width : 0), b.y + 4) || b.lifetime > SPELL_LIFETIME) {
         return false;
       }
       return b.active;
@@ -147,9 +148,9 @@ const Player = (() => {
     if (entity.invincible > 0) entity.invincible--;
     if (entity.spellTimer > 0) entity.spellTimer--;
 
-    // Mana regen (every 180 frames = ~3 sec)
+    // Mana regen
     entity.manaRegenTimer++;
-    if (entity.manaRegenTimer >= 180 && entity.mana < entity.maxMana) {
+    if (entity.manaRegenTimer >= MANA_REGEN_FRAMES && entity.mana < entity.maxMana) {
       entity.mana++;
       entity.manaRegenTimer = 0;
     }
@@ -222,6 +223,37 @@ const Player = (() => {
 
     updateSpellBolts();
 
+    // ── STOMP CHECK (jump on enemy = kill) ──
+    if (entity.vy > 1 && !entity.onGround) {
+      Enemies.getList().forEach(enemy => {
+        if (enemy.dying || !enemy.active) return;
+        if (enemy.type === 'ghost') return; // ghosts can't be stomped
+        const stompBox = {
+          x: entity.x + 4,
+          y: entity.y + entity.height - 4,
+          width: entity.width - 8,
+          height: 10
+        };
+        if (
+          stompBox.x < enemy.x + enemy.width &&
+          stompBox.x + stompBox.width > enemy.x &&
+          stompBox.y < enemy.y + 8 &&
+          stompBox.y + stompBox.height > enemy.y
+        ) {
+          // STOMP!
+          enemy.hp = 0;
+          enemy.dying = true;
+          enemy.dyingFrame = 0;
+          Player.addScore(150);
+          Audio.play('enemyDie');
+          // Bounce the player up
+          entity.vy = -8;
+          entity.jumpsLeft = Math.max(entity.jumpsLeft, 1);
+          Game.screenShake(3, 5);
+        }
+      });
+    }
+
     // ── CAMERA ──
     Level.camera.follow(entity);
   }
@@ -233,10 +265,10 @@ const Player = (() => {
     entity.invincible = INVINCIBLE_DURATION;
     entity.state = 'hurt';
     Audio.play('hurt');
-    // Knockback
-    entity.vy = -5;
-    entity.vx = entity.facingRight ? -3 : 3;
-    Game.screenShake(6, 8);
+    // Light knockback — doesn't send player flying
+    entity.vy = -3.5;
+    entity.vx = entity.facingRight ? -2 : 2;
+    Game.screenShake(5, 7);
     if (entity.lives <= 0) {
       entity.lives = 0;
       entity.active = false;

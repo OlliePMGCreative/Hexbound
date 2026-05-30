@@ -68,6 +68,39 @@ body {
 }
 body.crt-off #crt-overlay { display: none; }
 
+/* ── INTRO CANVAS ── */
+#intro-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 2000;
+  background: #000;
+  image-rendering: pixelated;
+  display: none; /* shown by JS */
+}
+
+#btn-skip-intro {
+  position: fixed;
+  top: 16px;
+  right: 20px;
+  z-index: 2001;
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  color: rgba(155,89,216,0.7);
+  background: rgba(13,10,30,0.6);
+  border: 1px solid rgba(91,45,142,0.5);
+  padding: 6px 10px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  display: none; /* shown when intro is running */
+  transition: color 0.15s, border-color 0.15s;
+}
+#btn-skip-intro:hover {
+  color: var(--pink-moon);
+  border-color: var(--magenta);
+}
+
 /* ── SCREENS ── */
 .screen {
   position: absolute;

@@ -6,6 +6,7 @@ const Game = (() => {
 
   // ── STATE ──
   const STATE = {
+    INTRO:     'intro',
     MENU:      'menu',
     PLAYING:   'playing',
     PAUSED:    'paused',
@@ -13,9 +14,9 @@ const Game = (() => {
     COMPLETE:  'complete',
   };
 
-  let currentState   = STATE.MENU;
-  let currentArea    = 1;
-  let areaCompleted  = false;
+  let currentState = STATE.INTRO;
+  let currentArea  = 1;
+  let areaCompleteTriggered = false;
 
   // Screen shake
   let shakeIntensity = 0;
@@ -26,7 +27,10 @@ const Game = (() => {
   const canvas = document.getElementById('game-canvas');
   const ctx    = canvas.getContext('2d');
 
-  // Ensure canvas pixel dimensions match the actual available area
+  // Intro canvas — fullscreen overlay
+  const introCanvas = document.getElementById('intro-canvas');
+  const introCtx    = introCanvas?.getContext('2d');
+
   function resizeCanvas() {
     const HUD_H  = 36;
     const CTRL_H = 48;
@@ -38,6 +42,12 @@ const Game = (() => {
 
     Level.camera.width  = W;
     Level.camera.height = H;
+
+    // Intro canvas always fullscreen
+    if (introCanvas) {
+      introCanvas.width  = window.innerWidth;
+      introCanvas.height = window.innerHeight;
+    }
   }
 
   // ── SCREEN SHAKE ──
@@ -58,8 +68,6 @@ const Game = (() => {
   }
 
   // ── AREA COMPLETION ──
-  let areaCompleteTriggered = false;
-
   function triggerAreaComplete() {
     if (areaCompleteTriggered) return;
     areaCompleteTriggered = true;
@@ -70,7 +78,6 @@ const Game = (() => {
   }
 
   function onAllCiviliansSaved() {
-    // Bonus score for saving everyone
     Player.addScore(500);
   }
 
@@ -88,28 +95,32 @@ const Game = (() => {
     currentState = STATE.PLAYING;
     areaCompleteTriggered = false;
 
-    // Load level
     Level.load(areaId);
     resizeCanvas();
 
-    // Init systems
     Player.init();
     Enemies.init();
     UI.initCivilians();
 
-    // Show game screen
     UI.showScreen('game-screen');
     Audio.stopMusic();
-    // Minimal ambient loop during gameplay
     Audio.startMusic();
   }
 
   // ── MAIN GAME LOOP ──
-  let lastTime = 0;
   let running = false;
 
-  function gameLoop(timestamp) {
-    if (!running) return;
+  function gameLoop() {
+    if (!running) { requestAnimationFrame(gameLoop); return; }
+
+    // ── INTRO ──
+    if (currentState === STATE.INTRO) {
+      if (introCtx && Intro.isRunning()) {
+        Intro.update(introCtx, introCanvas.width, introCanvas.height);
+      }
+      requestAnimationFrame(gameLoop);
+      return;
+    }
 
     // ── UPDATE ──
     if (currentState === STATE.PLAYING) {
@@ -123,13 +134,11 @@ const Game = (() => {
       updateShake();
     }
 
-    // ── RENDER ── (only when game is active)
+    // ── RENDER (only when gameplay active) ──
     if (currentState === STATE.PLAYING || currentState === STATE.COMPLETE || currentState === STATE.GAMEOVER) {
       ctx.save();
-
       if (shakeX || shakeY) ctx.translate(shakeX, shakeY);
 
-      // Clear
       ctx.fillStyle = '#0d0a1e';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -153,15 +162,25 @@ const Game = (() => {
   }
 
   // ── INIT ──
-  function init() {
+  async function init() {
     resizeCanvas();
-    UI.init();
-
-    // Handle window resize
     window.addEventListener('resize', resizeCanvas);
+
+    // Show intro canvas, hide game elements
+    if (introCanvas) introCanvas.style.display = 'block';
+
+    // Preload intro images then start
+    await Intro.preload();
 
     running = true;
     requestAnimationFrame(gameLoop);
+
+    Intro.start(introCanvas, introCtx, () => {
+      // Intro done → show main menu
+      if (introCanvas) introCanvas.style.display = 'none';
+      currentState = STATE.MENU;
+      UI.init();
+    });
   }
 
   return {
