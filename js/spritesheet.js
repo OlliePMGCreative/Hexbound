@@ -56,9 +56,19 @@ const Sprites = (() => {
 
   // ─── Utility: draw a 1-unit pixel block ───
   function px(ctx, x, y, color, size = PIXEL) {
-    if (!color || color === 'T') return; // T = transparent
+    if (!color || color === 'T') return;
     ctx.fillStyle = color;
     ctx.fillRect(Math.floor(x * size), Math.floor(y * size), size, size);
+  }
+
+  // ─── Outline: draw 1px black border around rect ───
+  const OL = '#06030f'; // GBA outline colour
+  function outline(ctx, x, y, w, h) {
+    ctx.fillStyle = OL;
+    ctx.fillRect(x - 1, y,     1,     h);
+    ctx.fillRect(x + w, y,     1,     h);
+    ctx.fillRect(x,     y - 1, w,     1);
+    ctx.fillRect(x,     y + h, w,     1);
   }
 
   // ─── Draw a grid of pixels from a colour map ───
@@ -94,67 +104,85 @@ const Sprites = (() => {
   // We'll draw sprites using procedural canvas calls for better quality
   // and animation support. This avoids external image dependencies.
 
-  function drawSorcerer(ctx, x, y, frame = 0, facingRight = true, state = 'idle') {
+  function drawSorcerer(ctx, x, y, frame = 0, facingRight = true, state = 'idle', meleeAttFrame = 0) {
     ctx.save();
-    if (!facingRight) {
-      ctx.scale(-1, 1);
-      x = -x - 24;
-    }
+    if (!facingRight) { ctx.scale(-1, 1); x = -x - 24; }
 
-    const P = PIXEL;
-    const bobY = state === 'idle' ? Math.sin(frame * 0.08) * 1 : 0;
-    const baseX = x, baseY = y + bobY;
+    const bobY   = state === 'idle' ? Math.sin(frame * 0.08) * 1 : 0;
+    const baseX  = x, baseY = y + bobY;
+    const isAtk  = state === 'attack';
 
-    // Hood
+    // ── HOOD (GBA chunky) ──
     ctx.fillStyle = PAL.sorcererHood;
-    ctx.fillRect(baseX + 6,  baseY,      12, 3);
-    ctx.fillRect(baseX + 3,  baseY + 3,  18, 3);
-    ctx.fillRect(baseX,      baseY + 6,  24, 3);
+    ctx.fillRect(baseX + 6, baseY,     12, 3);
+    ctx.fillRect(baseX + 3, baseY + 3, 18, 3);
+    ctx.fillRect(baseX,     baseY + 6, 24, 3);
+    outline(ctx, baseX + 3, baseY, 18, 9);
 
-    // Face
+    // ── FACE ──
     ctx.fillStyle = PAL.sorcererSkin;
     ctx.fillRect(baseX + 6,  baseY + 9,  12, 9);
+    outline(ctx, baseX + 6,  baseY + 9,  12, 9);
 
-    // Eyes (glowing purple)
+    // Eyes
     ctx.fillStyle = PAL.sorcererEyes;
     ctx.fillRect(baseX + 7,  baseY + 12, 3, 3);
     ctx.fillRect(baseX + 14, baseY + 12, 3, 3);
-    // Eye glow
-    ctx.fillStyle = 'rgba(232,121,249,0.25)';
-    ctx.fillRect(baseX + 5,  baseY + 10, 7, 7);
-    ctx.fillRect(baseX + 12, baseY + 10, 7, 7);
 
-    // Robe body
+    // ── ROBE ──
     ctx.fillStyle = PAL.sorcererRobe;
-    ctx.fillRect(baseX + 3,  baseY + 18, 18, 6);
-    ctx.fillRect(baseX,      baseY + 24, 24, 6);
-    ctx.fillRect(baseX,      baseY + 30, 24, 6);
-    ctx.fillRect(baseX + 3,  baseY + 36, 18, 6);
-
-    // Robe shadow
+    ctx.fillRect(baseX + 3, baseY + 18, 18, 6);
+    ctx.fillRect(baseX,     baseY + 24, 24, 6);
+    ctx.fillRect(baseX,     baseY + 30, 24, 6);
+    ctx.fillRect(baseX + 3, baseY + 36, 18, 6);
+    // Left shadow strip
     ctx.fillStyle = PAL.sorcererHood;
-    ctx.fillRect(baseX + 3,  baseY + 18, 3, 24);
+    ctx.fillRect(baseX + 3, baseY + 18, 3, 24);
+    outline(ctx, baseX, baseY + 18, 24, 24);
 
-    // Staff (right hand)
-    ctx.fillStyle = PAL.staffBrown;
-    ctx.fillRect(baseX + 21, baseY + 18, 3, 27);
+    // ── STAFF ──
+    if (!isAtk) {
+      // Resting staff
+      ctx.fillStyle = PAL.staffBrown;
+      ctx.fillRect(baseX + 21, baseY + 18, 3, 27);
+      ctx.fillStyle = OL;
+      ctx.fillRect(baseX + 20, baseY + 18, 1, 27);
+      // Orb
+      const glowP = Math.sin(frame * 0.12) * 0.4 + 0.6;
+      ctx.fillStyle = PAL.staffGlow;
+      ctx.fillRect(baseX + 18, baseY + 12, 9, 9);
+      ctx.fillStyle = `rgba(217,70,239,${glowP * 0.5})`;
+      ctx.fillRect(baseX + 15, baseY + 9, 15, 15);
+      outline(ctx, baseX + 18, baseY + 12, 9, 9);
+    } else {
+      // Attack swing — staff raised and swung forward
+      const swingPct = Math.min(1, meleeAttFrame / 16);
+      const swingAngle = -1.2 + swingPct * 2.4; // -70deg to +70deg
+      ctx.save();
+      ctx.translate(baseX + 21, baseY + 22);
+      ctx.rotate(swingAngle);
+      ctx.fillStyle = PAL.staffBrown;
+      ctx.fillRect(-2, -28, 4, 28);
+      ctx.fillStyle = OL;
+      ctx.fillRect(-3, -28, 1, 28);
+      // Orb at tip
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-3, -32, 7, 7);
+      ctx.fillStyle = PAL.staffGlow;
+      ctx.fillRect(-2, -31, 5, 5);
+      ctx.restore();
+    }
 
-    // Staff glow orb
-    const glowPulse = Math.sin(frame * 0.12) * 0.4 + 0.6;
-    ctx.fillStyle = PAL.staffGlow;
-    ctx.fillRect(baseX + 18, baseY + 12, 9, 9);
-    ctx.fillStyle = `rgba(217, 70, 239, ${glowPulse * 0.5})`;
-    ctx.fillRect(baseX + 15, baseY + 9,  15, 15);
-
-    // Walk animation — legs
+    // ── WALK LEGS ──
     if (state === 'walk') {
-      const legSwing = Math.sin(frame * 0.25) * 4;
+      const swing = Math.sin(frame * 0.25) * 4;
       ctx.fillStyle = PAL.sorcererHood;
-      ctx.fillRect(baseX + 6,  baseY + 42 - legSwing, 6, 6);
-      ctx.fillRect(baseX + 12, baseY + 42 + legSwing, 6, 6);
+      ctx.fillRect(baseX + 6,  baseY + 42 - swing, 6, 6);
+      ctx.fillRect(baseX + 12, baseY + 42 + swing, 6, 6);
+      outline(ctx, baseX + 6, baseY + 42 - Math.abs(swing), 12, 6);
     } else {
       ctx.fillStyle = PAL.sorcererHood;
-      ctx.fillRect(baseX + 6,  baseY + 42, 12, 3);
+      ctx.fillRect(baseX + 6, baseY + 42, 12, 3);
     }
 
     ctx.restore();
@@ -165,42 +193,53 @@ const Sprites = (() => {
   // ════════════════
   function drawSkeleton(ctx, x, y, frame = 0, facingRight = true, dying = false) {
     ctx.save();
-    if (!facingRight) {
-      ctx.scale(-1, 1);
-      x = -x - 18;
-    }
+    if (!facingRight) { ctx.scale(-1, 1); x = -x - 16; }
     const alpha = dying ? Math.max(0, 1 - (frame / 20)) : 1;
     ctx.globalAlpha = alpha;
 
     // Skull
     ctx.fillStyle = PAL.skeletonBone;
-    ctx.fillRect(x + 3,  y,      12, 3);
-    ctx.fillRect(x,      y + 3,  18, 9);
-    ctx.fillRect(x + 3,  y + 12, 12, 3);
+    ctx.fillRect(x + 2, y,     12, 3);
+    ctx.fillRect(x,     y + 3, 16, 9);
+    ctx.fillRect(x + 2, y + 12,12, 3);
     // Jaw
-    ctx.fillRect(x + 3,  y + 15, 12, 3);
-    // Eyes
+    ctx.fillRect(x + 2, y + 15,12, 3);
+    outline(ctx, x, y, 16, 18);
+
+    // Eyes (red glowing)
     ctx.fillStyle = PAL.skeletonEye;
-    ctx.fillRect(x + 3,  y + 6,  3, 3);
-    ctx.fillRect(x + 12, y + 6,  3, 3);
+    ctx.fillRect(x + 2, y + 6, 4, 4);
+    ctx.fillRect(x + 10,y + 6, 4, 4);
+    ctx.fillStyle = 'rgba(255,50,50,0.4)';
+    ctx.fillRect(x + 1, y + 5, 6, 6);
+    ctx.fillRect(x + 9, y + 5, 6, 6);
 
     // Ribcage
     ctx.fillStyle = PAL.skeletonBone;
-    ctx.fillRect(x + 3,  y + 18, 12, 9);
+    ctx.fillRect(x + 2, y + 18, 12, 9);
+    outline(ctx, x + 2, y + 18, 12, 9);
     ctx.fillStyle = PAL.skeletonDark;
-    [3,5,7].forEach(r => ctx.fillRect(x + 4, y + 18 + r, 10, 1));
+    [2,5,7].forEach(r => ctx.fillRect(x + 3, y + 18 + r, 10, 1));
 
-    // Arms (animated)
-    const armSwing = Math.sin(frame * 0.2) * 3;
+    // Arms
+    const armS = Math.sin(frame * 0.2) * 3;
     ctx.fillStyle = PAL.skeletonBone;
-    ctx.fillRect(x,     y + 18 - armSwing, 3, 9);
-    ctx.fillRect(x + 15,y + 18 + armSwing, 3, 9);
+    ctx.fillRect(x - 2,  y + 18 - armS, 4, 9);
+    ctx.fillRect(x + 14, y + 18 + armS, 4, 9);
+    outline(ctx, x - 2,  y + 18 - Math.abs(armS), 4, 9);
+    outline(ctx, x + 14, y + 18 + Math.abs(armS), 4, 9);
+
+    // Pelvis
+    ctx.fillStyle = PAL.skeletonBone;
+    ctx.fillRect(x + 2, y + 27, 12, 3);
 
     // Legs
-    const legSwing = Math.sin(frame * 0.2) * 3;
+    const legS = Math.sin(frame * 0.2) * 3;
     ctx.fillStyle = PAL.skeletonBone;
-    ctx.fillRect(x + 3,  y + 27 + legSwing, 3, 9);
-    ctx.fillRect(x + 12, y + 27 - legSwing, 3, 9);
+    ctx.fillRect(x + 2,  y + 27 + legS, 4, 9);
+    ctx.fillRect(x + 10, y + 27 - legS, 4, 9);
+    outline(ctx, x + 2,  y + 27 + Math.abs(legS), 4, 9);
+    outline(ctx, x + 10, y + 27 + Math.abs(legS), 4, 9);
 
     ctx.restore();
   }
