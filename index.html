@@ -91,6 +91,7 @@
           <span id="hud-area">AREA 1: THE GRAVEYARD</span>
         </div>
         <div id="hud-right">
+          <button id="btn-in-game-menu" aria-label="Main Menu">MENU</button>
           <span id="hud-score">SCORE: 0</span>
           <span id="hud-civilians">SAVED: 0/2</span>
         </div>
@@ -119,7 +120,7 @@
           <span id="dialogue-name"></span>
         </div>
         <div id="dialogue-text"></div>
-        <div id="dialogue-hint" class="blink-text">[ PRESS E TO CONTINUE ]</div>
+        <div id="dialogue-hint" class="blink-text">[ PRESS F TO CONTINUE ]</div>
       </div>
     </div>
 
@@ -131,6 +132,15 @@
         <div id="reveal-code" class="reveal-code">----</div>
         <p class="panel-sub small">Write this down and enter it at the LOAD screen to resume from this point.</p>
         <button class="panel-btn" id="btn-reveal-continue">CONTINUE ▶</button>
+      </div>
+    </div>
+
+    <!-- ── PAUSE SCREEN ── -->
+    <div id="pause-screen" class="hidden">
+      <div class="overlay-panel">
+        <h2 class="panel-title">PAUSED</h2>
+        <button class="panel-btn" id="btn-resume">RESUME</button>
+        <button class="panel-btn secondary" id="btn-pause-menu">MAIN MENU</button>
       </div>
     </div>
 

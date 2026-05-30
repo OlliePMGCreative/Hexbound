@@ -464,9 +464,22 @@ body.crt-off #crt-overlay { display: none; }
 #hud-left { display: flex; flex-direction: column; gap: 2px; }
 #hud-center { font-size: 7px; color: var(--purple-light); letter-spacing: 2px; }
 #hud-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
-#hud-lives { color: var(--red-danger); font-size: 9px; }
-#hud-mana  { color: var(--purple-light); }
+#hud-lives    { color: var(--red-danger); font-size: 9px; }
+#hud-mana     { color: var(--purple-light); }
 #hud-civilians { color: var(--amber); }
+
+#btn-in-game-menu {
+  font-family: var(--font-pixel);
+  font-size: 6px;
+  color: var(--purple-light);
+  background: transparent;
+  border: 1px solid var(--purple-dark);
+  padding: 3px 8px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: color 0.1s, border-color 0.1s;
+}
+#btn-in-game-menu:hover { color: var(--pink-moon); border-color: var(--purple-main); }
 
 /* ── CANVAS ── */
 #game-canvas {
@@ -600,6 +613,19 @@ body.crt-off #crt-overlay { display: none; }
   0%, 100% { text-shadow: 0 0 20px var(--magenta), 0 0 40px var(--neon-purple); }
   50%       { text-shadow: 0 0 30px var(--pink-moon), 0 0 60px var(--magenta); }
 }
+
+/* ── PAUSE SCREEN ── */
+#pause-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.72);
+  flex-direction: column;
+}
+#pause-screen.hidden { display: none; }
 
 /* ── GAME OVER ── */
 #gameover-screen {

@@ -150,11 +150,27 @@ const UI = (() => {
     Audio.startMusic();
   }
 
-  function initMainMenu() {
-    document.getElementById('btn-play').addEventListener('click', () => {
-      Audio.play('menuSelect');
-      Game.startArea(1);
+  function startPlayWithIntro() {
+    Audio.play('menuSelect');
+    const introCanvas = Game.introCanvas;
+    const introCtx    = Game.introCtx;
+    if (!introCanvas || !introCtx) { Game.startArea(1); return; }
+
+    Game.setState(Game.STATE.INTRO);
+    introCanvas.style.display = 'block';
+    const skipBtn = document.getElementById('btn-skip-intro');
+    if (skipBtn) skipBtn.style.display = 'block';
+
+    Intro.preload().then(() => {
+      Intro.start(introCanvas, introCtx, () => {
+        introCanvas.style.display = 'none';
+        Game.startArea(1);
+      });
     });
+  }
+
+  function initMainMenu() {
+    document.getElementById('btn-play').addEventListener('click', startPlayWithIntro);
     document.getElementById('btn-load').addEventListener('click', () => {
       Audio.play('menuSelect');
       showScreen('passcode-screen');
@@ -169,27 +185,23 @@ const UI = (() => {
       showMainMenu();
     });
 
-    // Settings toggles
-    initToggle('sfx-toggle', true, (v) => {
-      Audio.setSFX(v);
-    });
-    initToggle('music-toggle', true, (v) => {
-      Audio.setMusic(v);
-    });
-    initToggle('crt-toggle', true, (v) => {
-      document.body.classList.toggle('crt-off', !v);
-    });
+    initToggle('sfx-toggle',   true, v => Audio.setSFX(v));
+    initToggle('music-toggle', true, v => Audio.setMusic(v));
+    initToggle('crt-toggle',   true, v => document.body.classList.toggle('crt-off', !v));
 
-    // Press any key on start menu
-    document.addEventListener('keydown', (e) => {
+    // Space/Enter on menu → play
+    document.addEventListener('keydown', e => {
       const menu = document.getElementById('start-menu');
-      if (menu && menu.classList.contains('active')) {
-        if (e.code === 'Enter' || e.code === 'Space') {
-          Audio.play('menuSelect');
-          Game.startArea(1);
-        }
+      if (menu?.classList.contains('active')) {
+        if (e.code === 'Enter' || e.code === 'Space') startPlayWithIntro();
       }
     });
+
+    // In-game menu button
+    const inGameMenuBtn = document.getElementById('btn-in-game-menu');
+    if (inGameMenuBtn) {
+      inGameMenuBtn.addEventListener('click', () => Game.togglePause());
+    }
   }
 
   function initToggle(id, defaultVal, onChange) {
@@ -410,10 +422,10 @@ const UI = (() => {
         ctx.fillStyle = '#f4f0ff';
         ctx.fillRect(dx + 6, dy - 4, 4, 3);
 
-        // "PRESS E" hint
+        // "PRESS F" interact hint
         ctx.fillStyle = 'rgba(244,240,255,0.7)';
         ctx.font = '5px "Press Start 2P", monospace';
-        ctx.fillText('PRESS E', dx + 7, dy - 18);
+        ctx.fillText('PRESS F', dx + 7, dy - 18);
       }
     });
   }
@@ -435,11 +447,27 @@ const UI = (() => {
     }
   }
 
+  // ── PAUSE OVERLAY ──
+  function showPause() { showOverlay('pause-screen'); }
+  function hidePause() { hideOverlay('pause-screen'); }
+
+  function initPause() {
+    document.getElementById('btn-resume')?.addEventListener('click', () => {
+      Audio.play('menuSelect'); Game.togglePause();
+    });
+    document.getElementById('btn-pause-menu')?.addEventListener('click', () => {
+      Audio.play('menuSelect');
+      hideOverlay('pause-screen');
+      Game.returnToMenu();
+    });
+  }
+
   // ── INIT ──
   function init() {
     Audio.init();
     initMainMenu();
     initGameOver();
+    initPause();
     showMainMenu();
   }
 
@@ -455,6 +483,8 @@ const UI = (() => {
     renderCivilians,
     checkLevelExit,
     showAreaComplete,
+    showPause,
+    hidePause,
     AREA1_COMPLETE_CODE,
     hasActiveDialogue() { return activeDialogue !== null; }
   };

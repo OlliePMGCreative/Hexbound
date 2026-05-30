@@ -1,21 +1,32 @@
 /* ═══════════════════════════════════════════════
-   player.js — Player entity, physics, animation, spells
+   player.js — Physics, controls, melee + fireball
+   Controls: WASD/arrows move, Space/W jump,
+             E = staff melee, R = fireball, F = interact
    ═══════════════════════════════════════════════ */
 
 const Player = (() => {
 
-  const GRAVITY    = 0.45;
-  const JUMP_FORCE = -10.5;        // slightly stronger jump
-  const DBL_JUMP_FORCE = -8.5;
-  const MOVE_SPEED = 4.0;          // faster run
-  const FRICTION   = 0.80;
-  const MAX_FALL   = 14;
+  // ── CONSTANTS ──
+  const GRAVITY         = 0.45;
+  const JUMP_FORCE      = -10.5;
+  const DBL_JUMP_FORCE  = -8.5;
+  const MOVE_SPEED      = 4.0;
+  const FRICTION        = 0.80;
+  const MAX_FALL        = 14;
 
-  const SPELL_COOLDOWN      = 14;  // faster fire rate
-  const SPELL_SPEED         = 14;  // faster bolts
-  const SPELL_LIFETIME      = 120; // longer range
-  const INVINCIBLE_DURATION = 100; // ~1.7 sec of immunity after hit
-  const MANA_REGEN_FRAMES   = 90;  // mana regen every 1.5 sec
+  const SPELL_COOLDOWN  = 14;
+  const SPELL_SPEED     = 14;
+  const SPELL_LIFETIME  = 120;
+  const INVINCIBLE_DUR  = 100;
+  const MANA_REGEN      = 90;
+
+  // Melee (E key — staff swing)
+  const MELEE_DUR          = 20;  // total frames of swing
+  const MELEE_COOLDOWN_DUR = 28;  // frames before can swing again
+  const MELEE_RANGE        = 48;  // hitbox width
+  const MELEE_HEIGHT       = 36;  // hitbox height
+  const MELEE_HIT_START    = 5;   // frame hitbox activates
+  const MELEE_HIT_END      = 17;  // frame hitbox deactivates
 
   const entity = {
     x: 32, y: 200,
@@ -23,119 +34,164 @@ const Player = (() => {
     vx: 0, vy: 0,
     onGround: false,
     facingRight: true,
-    state: 'idle', // idle, walk, jump, fall, cast, hurt
+    state: 'idle',
     frame: 0,
-    lives: 3,
-    maxLives: 3,
-    mana: 5,
-    maxMana: 5,
+    lives: 3, maxLives: 3,
+    mana: 5,  maxMana: 5,
     score: 0,
     invincible: 0,
     spellTimer: 0,
-    jumpsLeft: 2,  // allows double jump
+    jumpsLeft: 2,
     spellBolts: [],
     active: true,
     civiliansSaved: 0,
     totalCivilians: 2,
     manaRegenTimer: 0,
+    // melee
+    meleeTimer: 0,
+    meleeCooldown: 0,
+    meleeAttFrame: 0,
+    meleeHitLanded: false,
   };
 
-  // Input state
   const keys = {
-    left:     false,
-    right:    false,
-    jump:     false,
-    spell:    false,
-    interact: false,
-    jumpConsumed: false,
-    spellConsumed: false,
+    left: false, right: false, jump: false,
+    spell: false, melee: false, interact: false,
+    jumpConsumed: false, spellConsumed: false, meleeConsumed: false,
   };
+
+  let inputBound = false;
 
   function bindInput() {
+    if (inputBound) return;
+    inputBound = true;
+
     const keyMap = {
       'ArrowLeft':  'left',  'KeyA': 'left',
       'ArrowRight': 'right', 'KeyD': 'right',
       'ArrowUp':    'jump',  'KeyW': 'jump', 'Space': 'jump',
-      'KeyJ':       'spell', 'KeyZ': 'spell',
-      'KeyE':       'interact', 'ArrowDown': 'interact',
-      'Enter':      'interact',
+      'KeyR':       'spell',    // R = fireball
+      'KeyE':       'melee',    // E = staff swing
+      'KeyF':       'interact', 'Enter': 'interact', 'ArrowDown': 'interact',
     };
 
     window.addEventListener('keydown', e => {
-      const action = keyMap[e.code];
-      if (action) {
+      const a = keyMap[e.code];
+      if (a) { e.preventDefault(); keys[a] = true; }
+      if (e.code === 'Escape' || e.code === 'KeyM') {
         e.preventDefault();
-        keys[action] = true;
+        if (Game.getState() === Game.STATE.PLAYING || Game.getState() === Game.STATE.PAUSED) {
+          Game.togglePause();
+        }
       }
     });
 
     window.addEventListener('keyup', e => {
-      const action = keyMap[e.code];
-      if (action) {
-        keys[action] = false;
-        if (action === 'jump')  keys.jumpConsumed = false;
-        if (action === 'spell') keys.spellConsumed = false;
-      }
+      const a = keyMap[e.code];
+      if (!a) return;
+      keys[a] = false;
+      if (a === 'jump')  keys.jumpConsumed  = false;
+      if (a === 'spell') keys.spellConsumed = false;
+      if (a === 'melee') keys.meleeConsumed = false;
     });
 
-    // Mobile controls
-    const mobileMap = {
-      'btn-left':     'left',
-      'btn-right':    'right',
-      'btn-jump':     'jump',
-      'btn-spell':    'spell',
-      'btn-interact': 'interact',
+    // Mobile
+    const mob = {
+      'btn-left':'left', 'btn-right':'right', 'btn-jump':'jump',
+      'btn-spell':'spell', 'btn-interact':'interact',
     };
-    Object.entries(mobileMap).forEach(([id, action]) => {
+    Object.entries(mob).forEach(([id, action]) => {
       const el = document.getElementById(id);
       if (!el) return;
       el.addEventListener('touchstart', e => { e.preventDefault(); keys[action] = true; }, { passive: false });
       el.addEventListener('touchend',   e => {
-        e.preventDefault();
-        keys[action] = false;
-        if (action === 'jump')  keys.jumpConsumed = false;
+        e.preventDefault(); keys[action] = false;
+        if (action === 'jump')  keys.jumpConsumed  = false;
         if (action === 'spell') keys.spellConsumed = false;
       }, { passive: false });
-      el.addEventListener('mousedown', () => { keys[action] = true; });
-      el.addEventListener('mouseup',   () => {
-        keys[action] = false;
-        if (action === 'jump')  keys.jumpConsumed = false;
-        if (action === 'spell') keys.spellConsumed = false;
-      });
+      el.addEventListener('mousedown', () => keys[action] = true);
+      el.addEventListener('mouseup',   () => { keys[action] = false; });
     });
   }
 
-  // ── SPELL BOLTS ──
+  // ── FIREBALL ──
   function fireSpell() {
     if (entity.mana <= 0) return;
-    entity.mana = Math.max(0, entity.mana - 1);
+    entity.mana--;
     entity.spellTimer = SPELL_COOLDOWN;
     entity.state = 'cast';
     Audio.play('spell');
-
     entity.spellBolts.push({
       x: entity.facingRight ? entity.x + entity.width : entity.x - 16,
       y: entity.y + 14,
       vx: entity.facingRight ? SPELL_SPEED : -SPELL_SPEED,
-      vy: 0,
-      width: 16, height: 8,
-      frame: 0,
-      facingRight: entity.facingRight,
-      active: true,
-      lifetime: 0
+      vy: 0, width: 16, height: 8,
+      frame: 0, facingRight: entity.facingRight,
+      active: true, lifetime: 0,
     });
   }
 
   function updateSpellBolts() {
     entity.spellBolts = entity.spellBolts.filter(b => {
-      b.x += b.vx;
-      b.lifetime++;
-      b.frame++;
-      if (Level.isSolid(b.x + (b.facingRight ? b.width : 0), b.y + 4) || b.lifetime > SPELL_LIFETIME) {
-        return false;
-      }
+      b.x += b.vx; b.lifetime++; b.frame++;
+      if (Level.isSolid(b.x + (b.facingRight ? b.width : 0), b.y + 4) || b.lifetime > SPELL_LIFETIME) return false;
       return b.active;
     });
+  }
+
+  // ── STAFF MELEE ──
+  function startMelee() {
+    if (entity.meleeTimer > 0 || entity.meleeCooldown > 0) return;
+    entity.meleeTimer    = MELEE_DUR;
+    entity.meleeHitLanded = false;
+    entity.state         = 'attack';
+    Audio.play('menuSelect');
+  }
+
+  function updateMelee() {
+    if (entity.meleeTimer > 0) {
+      entity.meleeTimer--;
+      entity.meleeAttFrame = MELEE_DUR - entity.meleeTimer;
+
+      if (entity.meleeAttFrame >= MELEE_HIT_START &&
+          entity.meleeAttFrame <= MELEE_HIT_END &&
+          !entity.meleeHitLanded) {
+        checkMeleeHit();
+      }
+      if (entity.meleeTimer === 0) entity.meleeCooldown = MELEE_COOLDOWN_DUR;
+    }
+    if (entity.meleeCooldown > 0) entity.meleeCooldown--;
+  }
+
+  function checkMeleeHit() {
+    const hx = entity.facingRight ? entity.x + entity.width : entity.x - MELEE_RANGE;
+    const hitBox = { x: hx, y: entity.y + 4, width: MELEE_RANGE, height: MELEE_HEIGHT };
+
+    let hit = false;
+    Enemies.getList().forEach(enemy => {
+      if (!enemy.active || enemy.dying || !enemy.spawned) return;
+      if (hitBox.x < enemy.x + enemy.width  &&
+          hitBox.x + hitBox.width  > enemy.x &&
+          hitBox.y < enemy.y + enemy.height  &&
+          hitBox.y + hitBox.height > enemy.y) {
+        enemy.hp--;
+        enemy.hurtTimer = 12;
+        const knockDir = entity.facingRight ? 1 : -1;
+        enemy.vx = knockDir * 2.5;
+        if (enemy.hp <= 0) {
+          enemy.dying = true; enemy.dyingFrame = 0;
+          Player.addScore(100); Audio.play('enemyDie');
+        } else {
+          Audio.play('spellHit');
+        }
+        hit = true;
+      }
+    });
+
+    if (hit) {
+      entity.meleeHitLanded = true;
+      Game.screenShake(3, 4);
+    }
   }
 
   // ── UPDATE ──
@@ -143,77 +199,56 @@ const Player = (() => {
     if (!entity.active) return;
 
     entity.frame++;
-
-    // Timers
     if (entity.invincible > 0) entity.invincible--;
-    if (entity.spellTimer > 0) entity.spellTimer--;
+    if (entity.spellTimer  > 0) entity.spellTimer--;
 
-    // Mana regen
     entity.manaRegenTimer++;
-    if (entity.manaRegenTimer >= MANA_REGEN_FRAMES && entity.mana < entity.maxMana) {
-      entity.mana++;
-      entity.manaRegenTimer = 0;
+    if (entity.manaRegenTimer >= MANA_REGEN && entity.mana < entity.maxMana) {
+      entity.mana++; entity.manaRegenTimer = 0;
     }
 
-    // ── HORIZONTAL MOVEMENT ──
-    if (keys.left) {
-      entity.vx -= 0.8;
-      entity.facingRight = false;
-    }
-    if (keys.right) {
-      entity.vx += 0.8;
-      entity.facingRight = true;
-    }
+    const attacking = entity.meleeTimer > 0;
+
+    // Horizontal — halved during melee
+    if (keys.left)  { entity.vx -= attacking ? 0.4 : 0.8; entity.facingRight = false; }
+    if (keys.right) { entity.vx += attacking ? 0.4 : 0.8; entity.facingRight = true; }
     entity.vx *= FRICTION;
     entity.vx = Math.max(-MOVE_SPEED, Math.min(MOVE_SPEED, entity.vx));
 
-    // ── JUMP ──
+    // Jump
     if (keys.jump && !keys.jumpConsumed && entity.jumpsLeft > 0) {
       if (entity.jumpsLeft === 2 && entity.onGround) {
-        entity.vy = JUMP_FORCE;
-        entity.jumpsLeft = 1;
-        Audio.play('jump');
+        entity.vy = JUMP_FORCE; entity.jumpsLeft = 1; Audio.play('jump');
       } else if (entity.jumpsLeft === 1 && !entity.onGround) {
-        entity.vy = DBL_JUMP_FORCE;
-        entity.jumpsLeft = 0;
-        Audio.play('jump');
+        entity.vy = DBL_JUMP_FORCE; entity.jumpsLeft = 0; Audio.play('jump');
       }
       keys.jumpConsumed = true;
     }
 
-    // ── SPELL ──
-    if (keys.spell && !keys.spellConsumed && entity.spellTimer === 0) {
-      fireSpell();
-      keys.spellConsumed = true;
+    // E — melee
+    if (keys.melee && !keys.meleeConsumed) { startMelee(); keys.meleeConsumed = true; }
+
+    // R — fireball
+    if (keys.spell && !keys.spellConsumed && entity.spellTimer === 0 && !attacking) {
+      fireSpell(); keys.spellConsumed = true;
     }
 
-    // ── GRAVITY ──
-    entity.vy += GRAVITY;
-    entity.vy = Math.min(entity.vy, MAX_FALL);
+    updateMelee();
 
-    // ── COLLISION ──
+    // Gravity & collision
+    entity.vy += GRAVITY;
+    entity.vy  = Math.min(entity.vy, MAX_FALL);
     const wasOnGround = entity.onGround;
     Level.resolveCollision(entity);
+    if (!wasOnGround && entity.onGround) { entity.jumpsLeft = 2; Audio.play('land'); }
 
-    if (!wasOnGround && entity.onGround) {
-      entity.jumpsLeft = 2; // reset jumps on landing
-      Audio.play('land');
-    }
-
-    // Kill plane — fell off the bottom of the map
-    if (entity.y > Level.getMapHeight() + 64) {
-      takeDamage(1);
-      reset();
-    }
-
-    // ── WORLD BOUNDS ──
+    if (entity.y > Level.getMapHeight() + 64) { takeDamage(1); reset(); }
     entity.x = Math.max(0, Math.min(entity.x, Level.getMapWidth() - entity.width));
 
-    // ── STATE MACHINE ──
-    if (entity.invincible > 0 && entity.state !== 'hurt') {
-      // hurt flash
-    }
-    if (entity.onGround) {
+    // State machine
+    if (entity.meleeTimer > 0) {
+      entity.state = 'attack';
+    } else if (entity.onGround) {
       if (Math.abs(entity.vx) > 0.4) entity.state = 'walk';
       else if (entity.spellTimer > SPELL_COOLDOWN - 6) entity.state = 'cast';
       else entity.state = 'idle';
@@ -223,30 +258,15 @@ const Player = (() => {
 
     updateSpellBolts();
 
-    // ── STOMP CHECK (jump on enemy = kill) ──
+    // Stomp on enemies (jump on top to kill)
     if (entity.vy > 1 && !entity.onGround) {
+      const foot = { x: entity.x + 4, y: entity.y + entity.height - 4, width: entity.width - 8, height: 10 };
       Enemies.getList().forEach(enemy => {
-        if (enemy.dying || !enemy.active) return;
-        if (enemy.type === 'ghost') return; // ghosts can't be stomped
-        const stompBox = {
-          x: entity.x + 4,
-          y: entity.y + entity.height - 4,
-          width: entity.width - 8,
-          height: 10
-        };
-        if (
-          stompBox.x < enemy.x + enemy.width &&
-          stompBox.x + stompBox.width > enemy.x &&
-          stompBox.y < enemy.y + 8 &&
-          stompBox.y + stompBox.height > enemy.y
-        ) {
-          // STOMP!
-          enemy.hp = 0;
-          enemy.dying = true;
-          enemy.dyingFrame = 0;
-          Player.addScore(150);
-          Audio.play('enemyDie');
-          // Bounce the player up
+        if (!enemy.active || enemy.dying || !enemy.spawned || enemy.type === 'ghost') return;
+        if (foot.x < enemy.x + enemy.width && foot.x + foot.width > enemy.x &&
+            foot.y < enemy.y + 8 && foot.y + foot.height > enemy.y) {
+          enemy.hp = 0; enemy.dying = true; enemy.dyingFrame = 0;
+          Player.addScore(150); Audio.play('enemyDie');
           entity.vy = -8;
           entity.jumpsLeft = Math.max(entity.jumpsLeft, 1);
           Game.screenShake(3, 5);
@@ -254,7 +274,6 @@ const Player = (() => {
       });
     }
 
-    // ── CAMERA ──
     Level.camera.follow(entity);
   }
 
@@ -262,40 +281,23 @@ const Player = (() => {
   function takeDamage(amount) {
     if (entity.invincible > 0) return;
     entity.lives -= amount;
-    entity.invincible = INVINCIBLE_DURATION;
+    entity.invincible = INVINCIBLE_DUR;
     entity.state = 'hurt';
     Audio.play('hurt');
-    // Light knockback — doesn't send player flying
     entity.vy = -3.5;
     entity.vx = entity.facingRight ? -2 : 2;
     Game.screenShake(5, 7);
-    if (entity.lives <= 0) {
-      entity.lives = 0;
-      entity.active = false;
-      Game.triggerGameOver();
-    }
+    if (entity.lives <= 0) { entity.lives = 0; entity.active = false; Game.triggerGameOver(); }
   }
 
-  function gainMana(amount) {
-    entity.mana = Math.min(entity.maxMana, entity.mana + amount);
-    Audio.play('pickup');
-  }
-
-  function gainHealth(amount) {
-    entity.lives = Math.min(entity.maxLives, entity.lives + amount);
-    Audio.play('pickup');
-  }
-
-  function addScore(pts) {
-    entity.score += pts;
-  }
+  function gainMana(amount)   { entity.mana   = Math.min(entity.maxMana,  entity.mana + amount);   Audio.play('pickup'); }
+  function gainHealth(amount) { entity.lives   = Math.min(entity.maxLives, entity.lives + amount);  Audio.play('pickup'); }
+  function addScore(pts)      { entity.score  += pts; }
 
   function reset() {
-    const spawn = Level.getSpawns().playerStart;
-    entity.x = spawn.x;
-    entity.y = spawn.y;
-    entity.vx = 0;
-    entity.vy = 0;
+    const s = Level.getSpawns().playerStart;
+    entity.x = s.x; entity.y = s.y;
+    entity.vx = 0; entity.vy = 0;
     entity.invincible = 60;
   }
 
@@ -303,53 +305,69 @@ const Player = (() => {
   function render(ctx) {
     const camX = Math.floor(Level.camera.x);
     const camY = Math.floor(Level.camera.y);
+    const dx   = Math.floor(entity.x - camX);
+    const dy   = Math.floor(entity.y - camY);
 
-    const drawX = Math.floor(entity.x - camX);
-    const drawY = Math.floor(entity.y - camY);
+    if (entity.invincible > 0 && Math.floor(entity.invincible / 4) % 2 === 0) ctx.globalAlpha = 0.35;
 
-    // Invincibility flash
-    if (entity.invincible > 0 && Math.floor(entity.invincible / 4) % 2 === 0) {
-      ctx.globalAlpha = 0.4;
+    Sprites.drawSorcerer(ctx, dx, dy, entity.frame, entity.facingRight, entity.state, entity.meleeAttFrame);
+
+    // Draw melee arc during active frames
+    if (entity.meleeTimer > 0 &&
+        entity.meleeAttFrame >= MELEE_HIT_START &&
+        entity.meleeAttFrame <= MELEE_HIT_END) {
+      drawMeleeArc(ctx, dx, dy);
     }
-
-    Sprites.drawSorcerer(ctx, drawX, drawY, entity.frame, entity.facingRight, entity.state);
 
     ctx.globalAlpha = 1;
 
     // Spell bolts
-    entity.spellBolts.forEach(b => {
-      Sprites.drawSpellBolt(ctx, b.x - camX, b.y - camY, b.frame, b.facingRight);
-    });
+    entity.spellBolts.forEach(b => Sprites.drawSpellBolt(ctx, b.x - camX, b.y - camY, b.frame, b.facingRight));
+  }
+
+  function drawMeleeArc(ctx, x, y) {
+    const t = (entity.meleeAttFrame - MELEE_HIT_START) / (MELEE_HIT_END - MELEE_HIT_START);
+    const alpha = Math.sin(t * Math.PI) * 0.7;
+    const arcX  = entity.facingRight ? x + entity.width : x - MELEE_RANGE + 8;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    // Staff glow arc
+    const grad = ctx.createLinearGradient(arcX, y + 10, arcX + MELEE_RANGE, y + MELEE_HEIGHT);
+    grad.addColorStop(0, 'rgba(232,121,249,0.9)');
+    grad.addColorStop(1, 'rgba(217,70,239,0)');
+    ctx.fillStyle = grad;
+    // Diagonal arc shape (3 rectangles for pixel feel)
+    if (entity.facingRight) {
+      ctx.fillRect(x + entity.width,      y + 8,  20, 6);
+      ctx.fillRect(x + entity.width + 16, y + 14, 18, 6);
+      ctx.fillRect(x + entity.width + 28, y + 20, 16, 6);
+    } else {
+      ctx.fillRect(x - 20,  y + 8,  20, 6);
+      ctx.fillRect(x - 34,  y + 14, 18, 6);
+      ctx.fillRect(x - 44,  y + 20, 16, 6);
+    }
+    // Spark at tip
+    ctx.fillStyle = 'rgba(255,230,255,0.9)';
+    const sparkX = entity.facingRight ? x + entity.width + 28 + 16 : x - 46;
+    ctx.fillRect(sparkX, y + 18, 6, 6);
+    ctx.restore();
   }
 
   // ── INIT ──
   function init() {
-    const spawn = Level.getSpawns().playerStart;
-    entity.x = spawn.x;
-    entity.y = spawn.y;
+    const s = Level.getSpawns().playerStart;
+    entity.x = s.x; entity.y = s.y;
     entity.vx = 0; entity.vy = 0;
-    entity.lives = 3;
-    entity.mana = 5;
-    entity.score = 0;
-    entity.invincible = 0;
-    entity.spellTimer = 0;
-    entity.frame = 0;
-    entity.active = true;
-    entity.spellBolts = [];
+    entity.lives = 3; entity.mana = 5;
+    entity.score = 0; entity.invincible = 0;
+    entity.spellTimer = 0; entity.frame = 0;
+    entity.active = true; entity.spellBolts = [];
     entity.civiliansSaved = 0;
+    entity.meleeTimer = 0; entity.meleeCooldown = 0;
+    entity.meleeAttFrame = 0; entity.meleeHitLanded = false;
     bindInput();
   }
 
-  return {
-    entity,
-    keys,
-    init,
-    update,
-    render,
-    takeDamage,
-    gainMana,
-    gainHealth,
-    addScore,
-    reset,
-  };
+  return { entity, keys, init, update, render, takeDamage, gainMana, gainHealth, addScore, reset };
 })();
